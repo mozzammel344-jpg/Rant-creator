@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CyberRant Ultra-Loop</title>
+    <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
+    <style>
+        :root { --n-cyan: #00f3ff; --n-pink: #ff007f; --bg: #0a0a0c; }
+        
+        body { 
+            background: var(--bg); color: white; font-family: 'Courier New', monospace; 
+            display: flex; flex-direction: column; align-items: center; padding: 15px;
+        }
+
+        .shell {
+            width: 100%; max-width: 400px; border: 1px solid var(--n-cyan);
+            padding: 20px; border-radius: 12px; background: #111;
+            box-shadow: 0 0 15px rgba(0, 243, 255, 0.3);
+        }
+
+        h2 { color: var(--n-pink); text-align: center; font-size: 1.2rem; margin-top: 0; }
+
+        .input-box { margin-bottom: 15px; }
+        input[type="file"] { width: 100%; background: #222; color: #fff; padding: 8px; border-radius: 5px; border: 1px solid #444; }
+
+        /* PROGRESS BAR */
+        .p-bar { width: 100%; height: 8px; background: #222; border-radius: 4px; margin: 15px 0; display: none; overflow: hidden; }
+        #fill { width: 0%; height: 100%; background: linear-gradient(90deg, var(--n-cyan), var(--n-pink)); transition: 0.3s; }
+
+        button { 
+            width: 100%; padding: 12px; background: var(--n-pink); color: white; 
+            border: none; border-radius: 6px; font-weight: bold; cursor: pointer;
+        }
+
+        /* SUBTITLE BOX (50px, Black Outline) */
+        #sub-overlay {
+            position: absolute; bottom: 20%; width: 100%; text-align: center;
+            font-size: 50px; font-weight: 900; color: white;
+            text-shadow: -3px -3px 0 #000, 3px -3px 0 #000, -3px 3px 0 #000, 3px 3px 0 #000;
+            pointer-events: none; z-index: 100;
+            opacity: 0; transform: translateY(20px); transition: 0.5s;
+        }
+
+        .v-container { position: relative; width: 100%; margin-top: 20px; display: none; }
+        video { width: 100%; border-radius: 8px; border: 1px solid var(--n-cyan); }
+        
+        .active-sub { opacity: 1 !important; transform: translateY(0) !important; }
+    </style>
+</head>
+<body>
+
+<div class="shell">
+    <h2>[ RANT_GENERATOR_V3 ]</h2>
+    
+    <div class="input-box">
+        <label style="font-size: 12px; color: var(--n-cyan);">BG VIDEO (Short is OK, will loop):</label>
+        <input type="file" id="v-in" accept="video/*">
+    </div>
+
+    <div class="input-box">
+        <label style="font-size: 12px; color: var(--n-cyan);">RANT AUDIO (Full length):</label>
+        <input type="file" id="a-in" accept="audio/*">
+    </div>
+
+    <div class="p-bar" id="p-wrap"><div id="fill"></div></div>
+
+    <button id="go-btn">EXECUTE ENCHANTMENT</button>
+    <p id="msg" style="font-size: 11px; text-align: center; color: #666;">Status: Ready</p>
+
+    <div class="v-container" id="v-wrap">
+        <video id="out-v" controls></video>
+        <div id="sub-overlay">ENCHANTED RANT ACTIVATED</div>
+    </div>
+</div>
+
+<script>
+const { createFFmpeg, fetchFile } = FFmpeg;
+const ffmpeg = createFFmpeg({ log: false });
+
+const btn = document.getElementById('go-btn');
+const fill = document.getElementById('fill');
+const msg = document.getElementById('msg');
+const sub = document.getElementById('sub-overlay');
+
+ffmpeg.setProgress(({ ratio }) => {
+    fill.style.width = (ratio * 100) + "%";
+});
+
+btn.onclick = async () => {
+    const v = document.getElementById('v-in').files[0];
+    const a = document.getElementById('a-in').files[0];
+    if(!v || !a) return alert("Select files!");
+
+    btn.disabled = true;
+    document.getElementById('p-wrap').style.display = "block";
+    msg.innerText = "Status: Loading Engine...";
+
+    if (!ffmpeg.isLoaded()) await ffmpeg.load();
+
+    msg.innerText = "Status: Writing Memory...";
+    ffmpeg.FS('writeFile', 'inV.mp4', await fetchFile(v));
+    ffmpeg.FS('writeFile', 'inA.mp3', await fetchFile(a));
+
+    msg.innerText = "Status: Looping & Stitching...";
+
+    /** * THE LOGIC:
+     * -stream_loop -1: Loops the first input (video) infinitely
+     * -shortest: Stops the output as soon as the shortest stream (the audio) ends
+     */
+    await ffmpeg.run(
+        '-stream_loop', '-1', 
+        '-i', 'inV.mp4', 
+        '-i', 'inA.mp3', 
+        '-map', '0:v:0', 
+        '-map', '1:a:0', 
+        '-c:v', 'copy', 
+        '-c:a', 'aac', 
+        '-shortest', 
+        'out.mp4'
+    );
+
+    const data = ffmpeg.FS('readFile', 'out.mp4');
+    const url = URL.createObjectURL(new Blob([data.buffer], { type: 'video/mp4' }));
+    
+    document.getElementById('v-wrap').style.display = "block";
+    const video = document.getElementById('out-v');
+    video.src = url;
+    
+    msg.innerText = "Status: COMPLETED";
+    btn.disabled = false;
+
+    video.onplay = () => {
+        sub.classList.add('active-sub');
+        // Simple reveal logic for the rant text
+        setTimeout(() => { sub.innerText = "SYSTEM OVERLOADED"; }, 3000);
+    };
+};
+</script>
+
+</body>
+</html>
